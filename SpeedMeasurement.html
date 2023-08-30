@@ -6,7 +6,7 @@
 <body>
   <h1>Device Speed Measurement</h1>
   <p id="speed">Speed: </p>
-
+  <p id="geolocs"></p>
   <script>
     // Check if the Geolocation API is supported by the browser
     if ("geolocation" in navigator) {
@@ -18,6 +18,9 @@
 
     function handlePositionUpdate(position) {
       // Check if the position contains speed information
+
+      document.getElementById('speed').textContent = position;
+
       if (position.coords.speed !== null) {
         // Update the HTML element with the speed value
         document.getElementById('speed').textContent = 'Speed: ' + position.coords.speed.toFixed(2) + ' m/s';

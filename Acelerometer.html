@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Accelerometer Reading</title>
+</head>
+<body>
+  <h1>Accelerometer Reading</h1>
+  <p id="accelerationX">X-Axis: </p>
+  <p id="accelerationY">Y-Axis: </p>
+  <p id="accelerationZ">Z-Axis: </p>
+
+  <script>
+    // Check if the DeviceMotionEvent is supported by the browser
+    if (window.DeviceMotionEvent) {
+      // Listen for the device motion event
+      window.addEventListener('devicemotion', handleMotionEvent, false);
+    } else {
+      alert("Device motion not supported.");
+    }
+
+    function handleMotionEvent(event) {
+      // Get the acceleration values
+      var acceleration = event.acceleration;
+
+      // Update the HTML elements with the accelerometer data
+      document.getElementById('accelerationX').textContent = 'X-Axis: ' + acceleration.x.toFixed(2);
+      document.getElementById('accelerationY').textContent = 'Y-Axis: ' + acceleration.y.toFixed(2);
+      document.getElementById('accelerationZ').textContent = 'Z-Axis: ' + acceleration.z.toFixed(2);
+    }
+  </script>
+</body>
+</html>

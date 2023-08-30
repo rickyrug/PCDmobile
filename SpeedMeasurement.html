@@ -19,7 +19,7 @@
     function handlePositionUpdate(position) {
       // Check if the position contains speed information
 
-      document.getElementById('speed').textContent = position;
+      document.getElementById('geolocs').textContent = position;
 
       if (position.coords.speed !== null) {
         // Update the HTML element with the speed value

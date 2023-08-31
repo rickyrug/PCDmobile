@@ -10,15 +10,20 @@
   <script>
     // Check if the Geolocation API is supported by the browser
     if ("geolocation" in navigator) {
+      const options = {
+        enableHighAccuracy: true,
+        maximumAge: 30000,
+        timeout: 27000,
+      };
       // Retrieve the current position
-      navigator.geolocation.watchPosition(handlePositionUpdate);
+      navigator.geolocation.watchPosition(handlePositionUpdate,handlePositionUpdate,options);
     } else {
       alert("Geolocation not supported.");
     }
 
     function handlePositionUpdate(position) {
       // Check if the position contains speed information
-
+      console.log(position)
       document.getElementById('geolocs').textContent = position;
 
       if (position.coords.speed !== null) {

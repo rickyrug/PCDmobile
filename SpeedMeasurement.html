@@ -5,8 +5,16 @@
 </head>
 <body>
   <h1>Device Speed Measurement</h1>
-  <p id="speed">Speed: </p>
+  <h2 id="speed">Speed: </h2>
   <p id="geolocs"></p>
+  <table>
+    <th>
+      <tr>Speed MS</tr>
+    </th>
+    <tr>
+      <td id="speed"></td>
+    </tr>
+  </table>
   <script>
     // Check if the Geolocation API is supported by the browser
     if ("geolocation" in navigator) {
@@ -28,6 +36,10 @@
 
       if (position.coords.speed !== null) {
         // Update the HTML element with the speed value
+        var speedMS = position.coords.speed.toFixed(2);
+        var speedKMH = speedMS * 3.6;
+        var speedMPH = speedMS * 2.237;
+
         document.getElementById('speed').textContent = 'Speed: ' + position.coords.speed.toFixed(2) + ' m/s';
       } else {
         document.getElementById('speed').textContent = 'Speed information not available.';

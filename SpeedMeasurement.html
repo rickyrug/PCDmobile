@@ -46,12 +46,12 @@
         var speedMPH = speedMS * 2.237;
 
         if (speedMS > 0) {
-          $.blockUI({ message: '<h1><img src="busy.gif" /> Just a moment...'+speedMS+'</h1>' }); 
+          $.blockUI({ message: '<h1><img src="busy.gif" /> Block by movement please stop!!!... Your speed: '+speedMS+'</h1>' }); 
           document.getElementById('speed').textContent = 'Speed: ' + speedMS + ' m/s';
         } else 
         {
           $.unblockUI();
-          document.getElementById('speed').textContent = 'Speed information not available.';
+          document.getElementById('speed').textContent = 'Speed: ' + speedMS + ' m/s';
         }
 
         //document.getElementById('speed').textContent = 'Speed: ' + position.coords.speed.toFixed(2) + ' m/s';

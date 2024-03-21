@@ -38,13 +38,23 @@
       console.log(position)
       document.getElementById('geolocs').textContent = position;
 
-      if (position.coords.speed !== null) {
+      if (position.coords.speed !== null) 
+      {
         // Update the HTML element with the speed value
         var speedMS = position.coords.speed.toFixed(2);
         var speedKMH = speedMS * 3.6;
         var speedMPH = speedMS * 2.237;
 
-        document.getElementById('speed').textContent = 'Speed: ' + position.coords.speed.toFixed(2) + ' m/s';
+        if (speedMS > 0) {
+          $.blockUI({ message: '<h1><img src="busy.gif" /> Just a moment...'+speedMS+'</h1>' }); 
+          document.getElementById('speed').textContent = 'Speed: ' + speedMS + ' m/s';
+        } else 
+        {
+          $.unblockUI();
+          document.getElementById('speed').textContent = 'Speed information not available.';
+        }
+
+        //document.getElementById('speed').textContent = 'Speed: ' + position.coords.speed.toFixed(2) + ' m/s';
       } else {
         document.getElementById('speed').textContent = 'Speed information not available.';
       }

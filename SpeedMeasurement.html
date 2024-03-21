@@ -51,7 +51,7 @@
         } else 
         {
           $.unblockUI();
-          document.getElementById('speed').textContent = 'Speed: ' + speedMS + ' m/s';
+          document.getElementById('speed').textContent = 'Speed: ' + speedMS + ' m/s' + ' - ' + speedKMH.toFixed(2) + ' km/h' + ' - ' + speedMPH.toFixed(2) + ' mph';
         }
 
         //document.getElementById('speed').textContent = 'Speed: ' + position.coords.speed.toFixed(2) + ' m/s';

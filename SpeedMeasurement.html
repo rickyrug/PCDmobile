@@ -48,7 +48,7 @@
         var speedKMH = speedMS * 3.6;
         var speedMPH = speedMS * 2.237;
 
-        if (speedMS > 0.54) {
+        if (speedMS > 0.14) {
           $.blockUI({ message: '<h1><img src="busy.gif" /> Block by movement please stop!!!... Your Speed: ' + speedMS + ' m/s' + ' - ' + speedKMH.toFixed(2) + ' km/h' + ' - ' + speedMPH.toFixed(2) +'</h1>' }); 
           document.getElementById('speed').textContent = 'Speed: ' + speedMS + ' m/s';
         } else 

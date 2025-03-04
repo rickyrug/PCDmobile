@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibration API Example</title>
+</head>
+<body>
+    <button onclick="vibrateDevice()">Vibrate</button>
+
+    <script>
+        function vibrateDevice() {
+            if (navigator.vibrate) {
+                // Vibrate for 1000 milliseconds (1 second)
+                navigator.vibrate(1000);
+            } else {
+                alert("Vibration API is not supported by your browser.");
+            }
+        }
+    </script>
+</body>
+</html>

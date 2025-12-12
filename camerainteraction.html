@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Camera Capabilities Test</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 16px; }
+    .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+    video, canvas { width: min(480px, 100%); background: #111; border-radius: 12px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; max-width: 520px; }
+    .controls { display: grid; gap: 10px; }
+    label { display: grid; gap: 4px; }
+    input[type="range"] { width: 100%; }
+    button { padding: 10px 12px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; cursor: pointer; }
+    button:active { transform: translateY(1px); }
+    .ok { color: #0a7; }
+    .warn { color: #b80; }
+    .err { color: #c00; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #fafafa; border: 1px solid #eee; padding: 10px; border-radius: 12px; max-height: 320px; overflow: auto; }
+    small { color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Phone Camera Test Page</h1>
+  <p><small>Requires HTTPS (or localhost). On iOS Safari, manual focus/torch support may be limited.</small></p>
+
+  <div class="row">
+    <div class="card">
+      <h2>Live</h2>
+      <video id="video" autoplay playsinline muted></video>
+      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="btnStart">Start</button>
+        <button id="btnStop">Stop</button>
+        <button id="btnSnap">Snapshot</button>
+      </div>
+      <p id="status"></p>
+    </div>
+
+    <div class="card">
+      <h2>Controls</h2>
+      <div class="controls">
+        <label>
+          Camera
+          <select id="cameraSelect"></select>
+        </label>
+
+        <label>
+          Facing mode (hint)
+          <select id="facingSelect">
+            <option value="environment" selected>environment (back)</option>
+            <option value="user">user (front)</option>
+          </select>
+        </label>
+
+        <label>
+          Resolution (hint)
+          <select id="resSelect">
+            <option value="default" selected>default</option>
+            <option value="720p">1280×720</option>
+            <option value="1080p">1920×1080</option>
+            <option value="4k">3840×2160</option>
+          </select>
+        </label>
+
+        <label>
+          Focus mode (if supported)
+          <select id="focusModeSelect" disabled></select>
+        </label>
+
+        <label>
+          Focus distance (if supported)
+          <input id="focusRange" type="range" min="0" max="10" step="0.01" value="1" disabled />
+          <span id="focusValue"><small>n/a</small></span>
+        </label>
+
+        <label>
+          Zoom (if supported)
+          <input id="zoomRange" type="range" min="1" max="1" step="0.01" value="1" disabled />
+          <span id="zoomValue"><small>n/a</small></span>
+        </label>
+
+        <label style="display:flex; align-items:center; gap:10px;">
+          <input id="torchToggle" type="checkbox" disabled />
+          Torch (if supported)
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Snapshot</h2>
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="card" style="flex: 1 1 520px;">
+      <h2>Capabilities / Settings / Log</h2>
+      <pre id="log"></pre>
+    </div>
+    <div>
+        <span id="result"></span>
+    </div>
+  </div>
+<script type="text/javascript" src="https://unpkg.com/@zxing/library@0.21.3"></script>
+<script>
+(() => {
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const logEl = document.getElementById("log");
+  const statusEl = document.getElementById("status");
+
+  const btnStart = document.getElementById("btnStart");
+  const btnStop = document.getElementById("btnStop");
+  const btnSnap = document.getElementById("btnSnap");
+
+  const cameraSelect = document.getElementById("cameraSelect");
+  const facingSelect = document.getElementById("facingSelect");
+  const resSelect = document.getElementById("resSelect");
+
+  const focusModeSelect = document.getElementById("focusModeSelect");
+  const focusRange = document.getElementById("focusRange");
+  const focusValue = document.getElementById("focusValue");
+
+  const zoomRange = document.getElementById("zoomRange");
+  const zoomValue = document.getElementById("zoomValue");
+
+  const torchToggle = document.getElementById("torchToggle");
+
+  let stream = null;
+  let track = null;
+
+  function setStatus(msg, cls="") {
+    statusEl.className = cls;
+    statusEl.textContent = msg;
+  }
+
+  function log(...args) {
+    const line = args.map(a => typeof a === "string" ? a : JSON.stringify(a, null, 2)).join(" ");
+    logEl.textContent = (line + "\n\n" + logEl.textContent).slice(0, 20000);
+  }
+
+  function isSecureContextOk() {
+    return window.isSecureContext || location.hostname === "localhost";
+  }
+
+  async function listCameras() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === "videoinput");
+
+      cameraSelect.innerHTML = "";
+      cams.forEach((cam, idx) => {
+        const opt = document.createElement("option");
+        opt.value = cam.deviceId;
+        opt.textContent = cam.label || `Camera ${idx + 1} (label hidden until permission)`;
+        cameraSelect.appendChild(opt);
+      });
+
+      if (!cams.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No cameras found";
+        cameraSelect.appendChild(opt);
+      }
+
+      log("Cameras:", cams.map(c => ({ deviceId: c.deviceId, label: c.label })));
+    } catch (e) {
+      log("enumerateDevices error:", e);
+    }
+  }
+
+  function buildVideoConstraints() {
+    const facingMode = facingSelect.value;
+    const deviceId = cameraSelect.value || null;
+
+    let width, height;
+    const res = resSelect.value;
+    if (res === "720p") { width = 1280; height = 720; }
+    else if (res === "1080p") { width = 1920; height = 1080; }
+    else if (res === "4k") { width = 3840; height = 2160; }
+
+    // Hints: browser may ignore if not supported
+    const video = {
+      facingMode: { ideal: facingMode },
+    };
+
+    if (deviceId) video.deviceId = { exact: deviceId };
+    if (width && height) {
+      video.width = { ideal: width };
+      video.height = { ideal: height };
+    }
+
+    return video;
+  }
+
+  async function stopCamera() {
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+    }
+    stream = null;
+    track = null;
+    video.srcObject = null;
+
+    focusModeSelect.disabled = true;
+    focusRange.disabled = true;
+    zoomRange.disabled = true;
+    torchToggle.disabled = true;
+    torchToggle.checked = false;
+
+    setStatus("Stopped.", "warn");
+  }
+
+  async function startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus("getUserMedia not supported in this browser.", "err");
+      return;
+    }
+    if (!isSecureContextOk()) {
+      setStatus("Not a secure context. Use HTTPS or localhost.", "err");
+      return;
+    }
+
+    await stopCamera();
+
+    try {
+      const constraints = { video: buildVideoConstraints(), audio: false };
+      log("Requesting getUserMedia with constraints:", constraints);
+
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = stream;
+
+      track = stream.getVideoTracks()[0];
+
+      const settings = track.getSettings?.() || {};
+      const caps = track.getCapabilities?.() || {};
+
+      setStatus("Camera started.", "ok");
+      log("Track settings:", settings);
+      log("Track capabilities:", caps);
+
+      // Populate focus mode
+      if (caps.focusMode && Array.isArray(caps.focusMode)) {
+        focusModeSelect.innerHTML = "";
+        caps.focusMode.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m;
+          opt.textContent = m;
+          focusModeSelect.appendChild(opt);
+        });
+        focusModeSelect.disabled = false;
+
+        // Prefer manual if available
+        if (caps.focusMode.includes("manual")) focusModeSelect.value = "manual";
+        else focusModeSelect.value = caps.focusMode[0];
+      } else {
+        focusModeSelect.disabled = true;
+        focusModeSelect.innerHTML = "<option>n/a</option>";
+      }
+
+      // Focus distance slider
+      if (caps.focusDistance && typeof caps.focusDistance === "object") {
+        focusRange.min = caps.focusDistance.min;
+        focusRange.max = caps.focusDistance.max;
+        focusRange.step = caps.focusDistance.step ?? 0.01;
+
+        const current = settings.focusDistance ?? focusRange.min;
+        focusRange.value = current;
+        focusRange.disabled = false;
+        focusValue.innerHTML = `<small>${Number(current).toFixed(2)}</small>`;
+      } else {
+        focusRange.disabled = true;
+        focusValue.innerHTML = "<small>n/a</small>";
+      }
+
+      // Zoom slider
+      if (caps.zoom && typeof caps.zoom === "object") {
+        zoomRange.min = caps.zoom.min;
+        zoomRange.max = caps.zoom.max;
+        zoomRange.step = caps.zoom.step ?? 0.01;
+
+        const current = settings.zoom ?? caps.zoom.min;
+        zoomRange.value = current;
+        zoomRange.disabled = false;
+        zoomValue.innerHTML = `<small>${Number(current).toFixed(2)}</small>`;
+      } else {
+        zoomRange.disabled = true;
+        zoomValue.innerHTML = "<small>n/a</small>";
+      }
+
+      // Torch toggle
+      if (caps.torch === true) {
+        torchToggle.disabled = false;
+      } else {
+        torchToggle.disabled = true;
+      }
+
+      // Refresh camera labels after permission
+      await listCameras();
+
+    } catch (e) {
+      setStatus(`Failed to start camera: ${e.name || "Error"} - ${e.message || e}`, "err");
+      log("getUserMedia error:", e);
+    }
+  }
+
+  async function applyAdvancedConstraint(obj) {
+    if (!track) return;
+    try {
+      await track.applyConstraints({ advanced: [obj] });
+      const settings = track.getSettings?.() || {};
+      log("applyConstraints OK:", obj, "New settings:", settings);
+    } catch (e) {
+      log("applyConstraints FAILED:", obj, e);
+    }
+  }
+
+  function snapshot() {
+    if (!video.videoWidth || !video.videoHeight) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    log(`Snapshot taken: ${canvas.width}x${canvas.height}`);
+
+    saveCanvas("image/png");
+  }
+
+function saveCanvas(mime = "image/png") {
+  if (!canvas.width || !canvas.height) return;
+
+  const quality = mime === "image/jpeg" ? 1 : undefined;
+
+  canvas.toBlob((blob) => {
+    if (!blob) { log("Save failed: empty canvas"); return; }
+
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    const ext = mime === "image/jpeg" ? "jpg" : "png";
+    const filename = `snapshot-${ts}.${ext}`;
+
+    const a = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    log(`Saved ${filename}`);
+    // Decode the same canvas image
+    decodeFromCanvasImage(mime);
+
+  }, mime, quality);
+}
+
+async function decodeFromCanvasImage(mime = "image/png") {
+  if (!canvas.width || !canvas.height) return null;
+
+  const dataUrl = canvas.toDataURL(mime);
+
+  const codeReader = new ZXing.BrowserPDF417Reader();
+
+  try {
+    // IMPORTANT: pass the URL as the 2nd arg
+    const result = await codeReader.decodeFromImage(undefined, dataUrl);
+    console.log(result.text);
+    log(`Decoded result: ${result.text}`);
+    return result;
+  } catch (err) {
+    console.log("Decoding error:", err);
+    log(`Decode error: ${err}`);
+    return null;
+  }
+}
+
+
+  // Events
+  btnStart.addEventListener("click", startCamera);
+  btnStop.addEventListener("click", stopCamera);
+  btnSnap.addEventListener("click", snapshot);
+
+  cameraSelect.addEventListener("change", startCamera);
+  facingSelect.addEventListener("change", startCamera);
+  resSelect.addEventListener("change", startCamera);
+
+  focusModeSelect.addEventListener("change", async () => {
+    const mode = focusModeSelect.value;
+    await applyAdvancedConstraint({ focusMode: mode });
+
+    // If switching away from manual, keep slider but it may do nothing
+    // Some devices require setting mode=manual before focusDistance works.
+  });
+
+  focusRange.addEventListener("input", async (e) => {
+    const val = Number(e.target.value);
+    focusValue.innerHTML = `<small>${val.toFixed(2)}</small>`;
+    // Best-effort: set manual + distance together
+    await applyAdvancedConstraint({ focusMode: "manual", focusDistance: val });
+  });
+
+  zoomRange.addEventListener("input", async (e) => {
+    const val = Number(e.target.value);
+    zoomValue.innerHTML = `<small>${val.toFixed(2)}</small>`;
+    await applyAdvancedConstraint({ zoom: val });
+  });
+
+  torchToggle.addEventListener("change", async (e) => {
+    const on = !!e.target.checked;
+    await applyAdvancedConstraint({ torch: on });
+  });
+
+  // Init
+  (async () => {
+    if (!isSecureContextOk()) {
+      setStatus("Open this page on HTTPS or localhost for camera access.", "err");
+    } else {
+      setStatus("Ready. Click Start.", "warn");
+    }
+    await listCameras();
+  })();
+})();
+</script>
+</body>
+</html>

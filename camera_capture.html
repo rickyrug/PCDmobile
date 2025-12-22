@@ -37,8 +37,8 @@
         const statusDiv = document.getElementById('status');
 
 
-        // Request camera access and stream to video element
-        navigator.mediaDevices.getUserMedia({ video: true })
+        // Request back camera (environment) on phones if available
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } })
             .then(stream => {
                 video.srcObject = stream;
             })

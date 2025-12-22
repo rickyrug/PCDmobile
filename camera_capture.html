@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Photo Capture & PDF417 Decode</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; }
+        #video { width: 100%; max-width: 480px; border: 1px solid #ccc; }
+        #canvas { display: none; margin-top: 1em; border: 1px solid #ccc; }
+        #photo { margin-top: 1em; max-width: 480px; border: 1px solid #ccc; }
+        #capture { margin-top: 1em; }
+        #result { margin-top: 1em; font-size: 1.2em; color: green; }
+    </style>
+</head>
+<body>
+    <h1>Open Camera and Take Photo</h1>
+    <div style="position:relative; display:inline-block; max-width:480px; width:100%;">
+        <video id="video" autoplay playsinline style="width:100%; display:block;"></video>
+        <div id="overlay-square" style="position:absolute; top:50%; left:50%; width:95%; height:30%; transform:translate(-50%,-50%); border:3px solid red; box-sizing:border-box; pointer-events:none; border-radius:8px; z-index:2;"></div>
+    </div>
+    <button id="capture">Take Photo</button>
+    <canvas id="canvas"></canvas>
+    <img id="photo" alt="Captured photo will appear here" />
+    <div id="result">PDF417 result will appear here.</div>
+    <div id="pdf417"></div>
+    <div id="status"></div>
+    <!-- ZXing library -->
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const photo = document.getElementById('photo');
+        const captureBtn = document.getElementById('capture');
+        const resultDiv = document.getElementById('result');
+        const pdf417Div = document.getElementById('pdf417');
+        const statusDiv = document.getElementById('status');
+
+
+        // Request camera access and stream to video element
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                alert('Could not access camera: ' + err.message);
+            });
+
+        captureBtn.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/png');
+            photo.src = dataUrl;
+            // Try to decode PDF417 from the captured image
+            decodePDF417(photo);
+        });
+
+        function decodePDF417(imgElement) {
+            resultDiv.textContent = 'Decoding...';
+            statusDiv.textContent = '';
+            pdf417Div.textContent = '';
+            // Wait for image to load
+            if (!imgElement.complete || imgElement.naturalWidth === 0) {
+                imgElement.onload = () => decodePDF417(imgElement);
+                return;
+            }
+            try {
+                const codeReader = new ZXing.BrowserPDF417Reader();
+                codeReader.decodeFromImage(imgElement)
+                    .then(result => {
+                        resultDiv.textContent = 'Result: ' + result.text;
+                        var pdfDecoded = getDataFromPDF417(result.text);
+                        pdf417Div.textContent = JSON.stringify(pdfDecoded, null, 2);
+                        statusDiv.textContent = 'Decode success.';
+                        console.log('Decode result:', result);
+                    })
+                    .catch(err => {
+                        resultDiv.textContent = 'No PDF417 code found.';
+                        statusDiv.textContent = 'Decode failed: ' + (err && err.message ? err.message : err);
+                        console.error('Decode error:', err);
+                    })
+                    .finally(() => {
+                        // Optionally, you can add any cleanup or status update here
+                        console.log('Decoding attempt finished.');
+                    });
+            } catch (e) {
+                resultDiv.textContent = 'Error: ' + e;
+                statusDiv.textContent = 'Exception: ' + e;
+                console.error('Exception during decode:', e);
+            }
+        }
+
+        function getDataFromPDF417(text) {
+            try {
+                var _obj = {};
+
+                var headerMatch = text.match(/@?ANSI(\d{6})(\d{2})(\d{4})/);
+                if (headerMatch) {
+
+                    _obj.standard = 'ANSI';
+                    _obj.issuerIdentificationNumber = headerMatch[1];
+                    _obj.aamvaVersionNumber = headerMatch[2];
+                    _obj.jurisdictionVersionNumber = headerMatch[3];
+                }
+
+                // Extraer información DL (Driver License)
+                const dlMatch = text.match(/DL(\d{8})/);
+                if (dlMatch) {
+
+                    _obj.fileType = 'DL';
+                    _obj.entrySize = dlMatch[1];
+                }
+
+                // Aqui se extraen los codigos de 3 caracteres
+                var lines = text.split(/[\r\n]+/);
+                for (let index = 0; index < lines.length; index++) {
+                    const line = lines[index];
+                    console.log(line.slice(3, line.length));
+                    switch (line.slice(0,3)) {
+                        case "ANS":
+                            break;
+                        case "DCS": // Apellido
+                            _obj.lastName = line.slice(3, line.length);
+
+                            break;
+                        case "DAC":// Primer nombre
+                            _obj.firstName = line.slice(3, line.length);
+                            break;
+                        case "DAD":// Segundo nombre
+                            _obj.middleName = line.slice(3, line.length);
+                            break;
+                        case "DBD":// Fecha de emisión del documento
+                            _obj.documentIssueDate = line.slice(3, line.length);
+                            break;
+                        case "DBB":// Fecha de nacimiento
+                            _obj.dateOfBirth = line.slice(3, line.length);
+                            break;
+                        case "DBA":// Fecha de expiración
+                            _obj.expirationDate = line.slice(3, line.length);
+                            break;
+                        case "DBC":// Sexo (1=M, 2=F)
+                            const _sexCode = line.slice(3, line.length);
+                            _obj.sex = _sexCode == ('1' || 'M') ? "Male" : "Female";
+                            break;
+                        case "DAU":// Altura
+                            _obj.height = line.slice(3, line.length);
+                            break;
+                        case "DAY":// Color de ojos
+                            const _eyeCode = line.slice(3, line.length);
+                            var _eyeColor = '';
+                            switch (_eyeCode) {
+                                case 'BLK': _eyeColor = 'Black'; break;
+                                case 'BLU': _eyeColor = 'Blue'; break;
+                                case 'BRO': _eyeColor = 'Brown'; break;
+                                case 'GRN': _eyeColor = 'Green'; break;
+                                case 'GRY': _eyeColor = 'Gray'; break;
+                                case 'HAZ': _eyeColor = 'Hazel'; break;
+                                case 'MAR': _eyeColor = 'Maroon'; break;
+                                case 'PNK': _eyeColor = 'Pink'; break;
+                                default:
+                                    break;
+                            }
+                            _obj.eyeColor = _eyeColor
+                            break;
+                        case "DAG":// Dirección
+                            _obj.address = line.slice(3, line.length);
+                            break;
+                        case "DAI":// Ciudad
+                            _obj.city = line.slice(3, line.length);
+                            break;
+                        case "DAJ":// Estado/Provincia
+                            _obj.state = line.slice(3, line.length);
+                            break;
+                        case "DAK":// Código postal
+                            _obj.postalCode = line.slice(3, line.length);
+                            break;
+                        case "DAQ":// Número de identificación del cliente
+                            _obj.customerIdNumber = line.slice(3, line.length);
+                            break;
+                        case "DCF":// Discriminador del documento
+                            _obj.documentDiscriminator = line.slice(3, line.length);
+                            break;
+                        case "DCG":// País emisor
+                            _obj.issuingCountry = line.slice(3, line.length);
+                            break;
+                        case "DCK":// Número de control de inventario
+                            _obj.inventoryControlNumber = line.slice(3, line.length);
+                            break;
+                        case "DDB":// Apellido alias
+                            _obj.aliasLastName = line.slice(3, line.length);
+                            break;
+                        case "DDC":// Primer nombre alias
+                            _obj.aliasFirstName = line.slice(3, line.length);
+                            break;
+                        case "DDD":// Segundo nombre alias
+                            _obj.aliasMiddleName = line.slice(3, line.length);
+                            break;
+                        case "DDE":// Sufijo alias
+                            _obj.aliasSuffix = line.slice(3, line.length);
+                            break;
+                        case "DDF":// Prefijo del nombre
+                            _obj.namePrefix = line.slice(3, line.length);
+                            break;
+                        case "DDG":// Sufijo del nombre
+                            _obj.nameSuffix = line.slice(3, line.length);
+                            break;
+                        case "DDH":// Información de auditoría
+                            _obj.auditInformation = line.slice(3, line.length);
+                            break;
+                        case "DDI":// Número de inventario
+                            _obj.inventoryNumber = line.slice(3, line.length);
+                            break;
+                        case "DDJ":// Información de auditoría 2
+                            _obj.auditInformation2 = line.slice(3, line.length);
+                            break;
+                        case "DDK":// Donante de órganos
+                            _obj.organDonor = line.slice(3, line.length);
+                            break;
+                        case "DDL":// Veterano
+                            _obj.veteran = line.slice(3, line.length);
+                            break;
+                        case "ZPA":// Campos específicos del estado
+                            _obj.stateSpecificA = line.slice(3, line.length);
+                            break;
+                        case "ZPB":// Campos específicos del estado
+                            _obj.stateSpecificB = line.slice(3, line.length);
+                            break;
+                        case "ZPC":// Campos específicos del estado
+                            _obj.stateSpecificC = line.slice(3, line.length);
+                            break;
+                        case "ZPD":// Campos específicos del estado
+                            _obj.stateSpecificD = line.slice(3, line.length);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                return _obj;
+
+            } catch (error) {
+                return _obj;
+            }
+        }
+    </script>
+</body>
+</html>
